@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 
-const chatwootBaseUrl = "https://app.chatwoot.com";
-const chatwootAccountId = 157617;
-const chatwootApiToken = "znPTbWXVgR4LmK2WiXq7FMHA";
+const chatwootBaseUrl = process.env.NEXT_PUBLIC_CHATWOOT_BASE_URL;
+const chatwootAccountId = Number(process.env.NEXT_PUBLIC_CHATWOOT_ACCOUNT_ID);
+const chatwootApiToken = process.env.CHATWOOT_API_TOKEN;
 
 const buildChatwootUrl = (request: NextRequest, path: string[]) => {
   const upstreamPath = path.join("/");
@@ -19,9 +19,12 @@ const buildChatwootUrl = (request: NextRequest, path: string[]) => {
 };
 
 const proxy = async (request: NextRequest, path: string[]) => {
-  if (!chatwootBaseUrl || !chatwootAccountId || !chatwootApiToken) {
+  if (!chatwootBaseUrl || !Number.isFinite(chatwootAccountId) || !chatwootApiToken) {
     return NextResponse.json(
-      { error: "Chatwoot server configuration is missing" },
+      {
+        error:
+          "Missing Chatwoot env vars: NEXT_PUBLIC_CHATWOOT_BASE_URL, NEXT_PUBLIC_CHATWOOT_ACCOUNT_ID, CHATWOOT_API_TOKEN",
+      },
       { status: 500 },
     );
   }
