@@ -4,13 +4,9 @@ import Script from "next/script"; // Next helper for non-blocking script injecti
 import styles from "./page.module.css"; // Existing styles from the generated template.
 
 export default function Home() {
-  const CHATWOOT_BASE_URL =
-    process.env.NEXT_PUBLIC_CHATWOOT_BASE_URL ??
-    "https://YOUR_CHATWOOT_BASE_URL"; // The Chatwoot instance URL (e.g. https://app.chatwoot.com).
+  const CHATWOOT_BASE_URL = "https://app.chatwoot.com"; // Hardcoded Chatwoot instance URL.
 
-  const CHATWOOT_WEBSITE_TOKEN =
-    process.env.NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN ??
-    "YOUR_WEBSITE_TOKEN"; // The Website inbox token from Chatwoot settings.
+  const CHATWOOT_WEBSITE_TOKEN = "5jRftncNU5Kix7QNwKHHxjZh"; // Hardcoded Website inbox token.
 
   const chatwootInitSnippet = `window.chatwootSettings=${JSON.stringify({
     position: "left",
@@ -49,8 +45,7 @@ export default function Home() {
             widget behavior (messaging, persistence, attachments, responsiveness).
           </p>
           <p>
-            Set `NEXT_PUBLIC_CHATWOOT_BASE_URL` and `NEXT_PUBLIC_CHATWOOT_WEBSITE_TOKEN`
-            in your environment (or replace placeholders) to connect the widget.
+            This demo is currently hardcoded to a specific Chatwoot instance and website token.
           </p>
         </div>
 
