@@ -89,19 +89,46 @@ export default function ChatSupport() {
   const [selected, setSelected] = useState<Conversation | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [reply, setReply] = useState("");
+  const [requestedDocument, setRequestedDocument] = useState("");
   const [sending, setSending] = useState(false);
+  const [requestingDocument, setRequestingDocument] = useState(false);
   const [filterStatus, setFilterStatus] = useState<Status>("open");
   const [activeTab, setActiveTab] = useState<ViewTab>("Mine");
+  const [searchQuery, setSearchQuery] = useState("");
   const [autoScroll, setAutoScroll] = useState(true);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const filteredConversations = searchQuery.trim()
+    ? conversations.filter((conv) => {
+        const q = searchQuery.toLowerCase();
+        const name = (conv.meta?.sender?.name || "").toLowerCase();
+        const subject = (
+          conv.meta?.subject ||
+          conv.additional_attributes?.subject ||
+          ""
+        ).toLowerCase();
+        const lastMsg = (conv.last_non_activity_message?.content || "").toLowerCase();
+        const id = String(conv.id);
+        return name.includes(q) || subject.includes(q) || lastMsg.includes(q) || id.includes(q);
+      })
+    : conversations;
+
+  const assigneeTypeParam: Record<ViewTab, string | null> = {
+    Mine: "assigned",
+    All: null,
+    unassigned: "unassigned",
+  };
 
   const fetchConversations = useCallback(
     async (silent = false) => {
       if (!silent) setLoading(true);
       if (!silent) setError("");
       try {
-        const res = await fetch(`/api/chatwoot/conversations?status=${filterStatus}`);
+        const params = new URLSearchParams({ status: filterStatus });
+        const assigneeType = assigneeTypeParam[activeTab];
+        if (assigneeType) params.set("assignee_type", assigneeType);
+        const res = await fetch(`/api/chatwoot/conversations?${params}`);
         if (!res.ok) throw new Error(`Error ${res.status} — unable to fetch conversations`);
         const data = await res.json();
         setConversations(data.data?.payload || []);
@@ -110,7 +137,8 @@ export default function ChatSupport() {
       }
       if (!silent) setLoading(false);
     },
-    [filterStatus]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [filterStatus, activeTab]
   );
 
   const fetchMessages = useCallback(async (convId: number | string) => {
@@ -163,6 +191,22 @@ export default function ChatSupport() {
       await fetchMessages(selected.id);
     } catch {}
     setSending(false);
+  }
+
+  async function sendDocumentRequest() {
+    if (!selected || !requestedDocument.trim()) return;
+    setRequestingDocument(true);
+    try {
+      const content = `Hi,\nPlease upload this document: ${requestedDocument.trim()}`;
+      await fetch(`/api/chatwoot/conversations/${selected.id}/messages`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content, message_type: "outgoing", private: false }),
+      });
+      setRequestedDocument("");
+      await fetchMessages(selected.id);
+    } catch {}
+    setRequestingDocument(false);
   }
 
   async function toggleStatus(conv: Conversation) {
@@ -275,7 +319,9 @@ export default function ChatSupport() {
             </span>
             <input
               type="text"
-              placeholder="Search conversations......"
+              placeholder="Search conversations..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               style={{
                 border: "none",
                 outline: "none",
@@ -342,7 +388,7 @@ export default function ChatSupport() {
               {error}
             </div>
           )}
-          {!loading && !error && conversations.length === 0 && (
+          {!loading && !error && filteredConversations.length === 0 && (
             <div
               style={{
                 padding: "40px 24px",
@@ -351,10 +397,10 @@ export default function ChatSupport() {
                 fontSize: 13,
               }}
             >
-              No {filterStatus} conversations
+              {searchQuery.trim() ? "No matching conversations" : `No ${filterStatus} conversations`}
             </div>
           )}
-          {conversations.map((conv) => {
+          {filteredConversations.map((conv) => {
             const contact = conv.meta?.sender;
             const isSelected = selected?.id === conv.id;
             const cs = statusColor[conv.status as Status] ?? statusColor.open;
@@ -626,6 +672,7 @@ export default function ChatSupport() {
                 const isOutgoing = msg.message_type === 1;
                 const isActivity = msg.message_type === 2;
                 const senderName = msg.sender?.name;
+                const attachments = Array.isArray(msg.attachments) ? msg.attachments : [];
                 const prevMsg = messages[i - 1];
                 const nextMsg = messages[i + 1];
                 const sameSenderAsPrev =
@@ -730,6 +777,52 @@ export default function ChatSupport() {
                       >
                         {msg.content}
                       </div>
+                      {attachments.length > 0 && (
+                        <div
+                          style={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 6,
+                            marginTop: 4,
+                            width: "100%",
+                          }}
+                        >
+                          {attachments.map((att: Message) => (
+                            <a
+                              key={att.id || att.data_url || att.file_type}
+                              href={att.data_url || att.thumb_url || "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                textDecoration: "none",
+                                border: "1px solid var(--color-border-tertiary)",
+                                background: "#fff",
+                                color: "var(--color-text-primary)",
+                                borderRadius: 10,
+                                padding: "8px 10px",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "space-between",
+                                gap: 8,
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontSize: 12,
+                                  overflow: "hidden",
+                                  textOverflow: "ellipsis",
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {att.file_type || "Attachment"}
+                              </span>
+                              <span style={{ fontSize: 11, color: "#185FA5", flexShrink: 0 }}>
+                                Open
+                              </span>
+                            </a>
+                          ))}
+                        </div>
+                      )}
                       {showTime && (
                         <div
                           style={{
@@ -766,6 +859,54 @@ export default function ChatSupport() {
                 background: "var(--color-background-primary)",
               }}
             >
+              <div
+                style={{
+                  display: "flex",
+                  gap: 8,
+                  alignItems: "center",
+                  marginBottom: 8,
+                }}
+              >
+                <input
+                  value={requestedDocument}
+                  onChange={(e) => setRequestedDocument(e.target.value)}
+                  placeholder="Request a specific document (e.g. Bank statement - last 3 months)"
+                  style={{
+                    flex: 1,
+                    height: 34,
+                    borderRadius: 8,
+                    border: "1px solid var(--color-border-primary)",
+                    background: "var(--color-background-primary)",
+                    color: "var(--color-text-primary)",
+                    padding: "0 10px",
+                    fontSize: 12,
+                    outline: "none",
+                  }}
+                />
+                <button
+                  onClick={sendDocumentRequest}
+                  disabled={!requestedDocument.trim() || requestingDocument}
+                  style={{
+                    height: 34,
+                    borderRadius: 8,
+                    border: "none",
+                    padding: "0 12px",
+                    background:
+                      requestedDocument.trim() && !requestingDocument
+                        ? "#185FA5"
+                        : "var(--color-border-secondary)",
+                    color: "#fff",
+                    fontSize: 12,
+                    fontWeight: 600,
+                    cursor:
+                      requestedDocument.trim() && !requestingDocument
+                        ? "pointer"
+                        : "default",
+                  }}
+                >
+                  {requestingDocument ? "Requesting..." : "Request Document"}
+                </button>
+              </div>
               <div
                 style={{
                   display: "flex",
